@@ -1,3 +1,4 @@
+import 'package:chat_app/models/uihelper.dart';
 import 'package:chat_app/models/usermodel.dart';
 import 'package:chat_app/pages/completeprofilepage.dart';
 import 'package:chat_app/pages/loginpage.dart';
@@ -22,10 +23,10 @@ class _SignUpPageState extends State<SignUpPage> {
     String cpasswor=cpasswordController.text.trim();
 
     if(email=="" || password=="" || cpasswor==""){
-      print("Please fill all the fields!");
+      UiHelper.showAlertDialog(context, "incompelete data!", "Please fill all the fields!");
     }
     else if(password!=cpasswor){
-      print("Password do not match!");
+      UiHelper.showAlertDialog(context, "Password MisMatch!", "The password you have do not match!");
     }
     else{
       signUp(email, password);
@@ -34,11 +35,13 @@ class _SignUpPageState extends State<SignUpPage> {
 
   void signUp(String email,String password) async{
     UserCredential? credential;
+    UiHelper.showLoadingDialog(context, "creating new account...");
     try{
       credential=await FirebaseAuth.instance.createUserWithEmailAndPassword(
           email: email, password: password);
     }on FirebaseAuthException catch(ex){
-      print(ex.code.toString());
+      Navigator.pop(context);
+      UiHelper.showAlertDialog(context, "An Error occured", ex.message.toString());
     }
     if(credential!=null){
       String uid= credential.user!.uid;
@@ -52,7 +55,8 @@ class _SignUpPageState extends State<SignUpPage> {
           .set(newUser.toMap())
           .then((value) {
             print("New User Created!");
-            Navigator.push(context, MaterialPageRoute(builder: (context){
+            Navigator.popUntil(context, (route) => route.isFirst);
+            Navigator.pushReplacement(context, MaterialPageRoute(builder: (context){
               return CompleteProfilePage(userModel: newUser, firebaseUser: credential!.user!);
             }));
       });

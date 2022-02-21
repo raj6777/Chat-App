@@ -10,6 +10,7 @@ class ChatRoomModel{
     participants=map["participants"];
     lastMessage=map["lastmessage"];
 
+
   }
   Map<String,dynamic>toMap(){
     return{

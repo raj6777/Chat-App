@@ -1,6 +1,7 @@
 import 'dart:developer';
 import 'dart:io';
 
+import 'package:chat_app/models/uihelper.dart';
 import 'package:chat_app/models/usermodel.dart';
 import 'package:chat_app/pages/homepage.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -78,7 +79,8 @@ class _CompleteProfilePageState extends State<CompleteProfilePage> {
     String fullname=fullNameController.text.trim();
 
     if(fullname=="" || imageFile==null){
-      print("Please fill all the fields");
+    UiHelper.showAlertDialog(context, "Incomplete Data!", "Please fill all the fields! "
+        "and upload profile pic");
     }
     else{
       log("uplaoding data....");
@@ -87,6 +89,7 @@ class _CompleteProfilePageState extends State<CompleteProfilePage> {
   }
 
   void uploadData() async{
+   UiHelper.showLoadingDialog(context, "Uploading image...");
     UploadTask uploadTask=FirebaseStorage.instance.ref("profilepicture")
         .child(widget.userModel.uid.toString()).putFile(imageFile!);
 
@@ -100,7 +103,8 @@ class _CompleteProfilePageState extends State<CompleteProfilePage> {
     await FirebaseFirestore.instance.collection("users").doc(widget.userModel.uid)
         .set(widget.userModel.toMap()).then((value){
           log("Data uploaded!");
-          Navigator.push(context, MaterialPageRoute(builder: (context){
+          Navigator.popUntil(context, (route) => route.isFirst);
+          Navigator.pushReplacement(context, MaterialPageRoute(builder: (context){
             return HomePage(userModel: widget.userModel, firebaseUser: widget.firebaseUser);
           }));
     });
