@@ -41,6 +41,8 @@ dependencies:
   image_picker: ^0.8.4+9
   image_cropper: ^1.4.1
   uuid: 3.0.5
+  file_picker: ^4.4.0
+  syncfusion_flutter_pdfviewer: ^19.4.53-beta
 
 dev_dependencies:
   flutter_test:
