@@ -92,6 +92,7 @@ class _SearchPageState extends State<SearchPage> {
                 builder: (context, snapshot) {
                   if (snapshot.connectionState == ConnectionState.active) {
                     if (snapshot.hasData) {
+
                       QuerySnapshot datasnapshot =
                           snapshot.data as QuerySnapshot;
                       if (datasnapshot.docs.length > 0) {
@@ -102,7 +103,6 @@ class _SearchPageState extends State<SearchPage> {
                           onTap: () async {
                             ChatRoomModel? chatroomModel=await
                             getchatRoomModel(searchedUser);
-
                             if(chatroomModel!=null){
                                Navigator.pop(context);
                                Navigator.push(context,

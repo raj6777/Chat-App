@@ -8,8 +8,9 @@ class MessageModel {
   DateTime? createdon;
   String? img;
   String? file;
+  String? type;
 
-  MessageModel({this.messageid,this.sender, this.text, this.seen, this.createdon,this.img,this.file});
+  MessageModel({this.messageid,this.sender, this.text, this.seen, this.createdon,this.img,this.file,this.type});
 
   MessageModel.fromMap(Map<String, dynamic>map){
     messageid=map["messageid"];
@@ -19,6 +20,7 @@ class MessageModel {
     createdon = map["createdon"].toDate();
     img=map["img"];
     file=map["file"];
+    type = map["type"];
   }
   Map<String,dynamic> toMap(){
     return{
@@ -29,6 +31,7 @@ class MessageModel {
       "createdon":createdon,
       "img":img,
       "file":file,
+      "type":type,
     };
   }
 }

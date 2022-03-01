@@ -43,6 +43,8 @@ dependencies:
   uuid: 3.0.5
   file_picker: ^4.4.0
   syncfusion_flutter_pdfviewer: ^19.4.53-beta
+  flutter_webrtc: ^0.8.2
+  cloud_firestore_web: ^2.6.8
 
 dev_dependencies:
   flutter_test:

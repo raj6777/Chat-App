@@ -280,6 +280,8 @@ import 'package:chat_app/models/messagemodel.dart';
 import 'package:chat_app/models/usermodel.dart';
 import 'package:chat_app/pages/homepage.dart';
 import 'package:chat_app/pages/pdfviewer.dart';
+import 'package:chat_app/pages/signaling.dart';
+import 'package:chat_app/pages/videoscreen.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -288,6 +290,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:image_cropper/image_cropper.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:flutter_webrtc/flutter_webrtc.dart';
 
 import '../models/uihelper.dart';
 
@@ -313,7 +316,11 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
   TextEditingController messageController = TextEditingController();
 
   File? imageFile;
-  late File pdfFile;
+  File? pdfFile;
+  Signaling signaling = Signaling();
+  final RTCVideoRenderer _localRenderer = RTCVideoRenderer();
+  final RTCVideoRenderer _remoteRenderer = RTCVideoRenderer();
+  String? roomId;
 
   void selectfile() async {
     FilePickerResult? result = await FilePicker.platform
@@ -321,7 +328,8 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
     if (result != null) {
       File file = File(result.files.first.path.toString());
       pdfFile = file;
-      UiHelper.showAlertDialog(context, file.path.split('/').last+' Picked', 'Press sent button');
+      UiHelper.showAlertDialog(
+          context, file.path.split('/').last + ' Picked', 'Press sent button');
     } else {
       print("file will be cancel");
     }
@@ -349,13 +357,16 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
 
   void sendmessage() async {
     String msg = messageController.text.trim();
+
     messageController.clear();
     if (pdfFile != null && msg == "" && imageFile == null) {
-      String fileName = DateTime.now().millisecondsSinceEpoch.toString()+'-'+pdfFile.path.split('/').last;
+      String fileName = DateTime.now().millisecondsSinceEpoch.toString() +
+          '-' +
+          pdfFile!.path.split('/').last;
       UploadTask uploadTask = FirebaseStorage.instance
           .ref("Chat_files")
           .child(fileName)
-          .putFile(pdfFile);
+          .putFile(pdfFile!);
       TaskSnapshot snapshot = await uploadTask;
       String pdfUrl = await snapshot.ref.getDownloadURL();
       if (pdfUrl != null) {
@@ -366,6 +377,7 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
           createdon: DateTime.now(),
           seen: false,
           file: pdfUrl,
+          type: "pdf",
         );
         FirebaseFirestore.instance
             .collection("chatrooms")
@@ -381,13 +393,15 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
         log("file sent!");
       }
     }
-    if (msg != "" && imageFile == null) {
+    if (msg != "" && imageFile == null && pdfFile == null) {
+      log(msg);
       MessageModel newMessage = MessageModel(
         messageid: uuid.v1(),
         sender: widget.userModel.uid,
         createdon: DateTime.now(),
         text: msg,
         seen: false,
+        type: 'msg',
       );
       FirebaseFirestore.instance
           .collection("chatrooms")
@@ -402,7 +416,7 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
           .set(widget.chatroom.toMap());
       log("Message sent!");
     }
-    if (imageFile != null && msg == "") {
+    if (imageFile != null && msg == "" && pdfFile == null) {
       String fileName = DateTime.now().millisecondsSinceEpoch.toString();
       UploadTask uploadTask = FirebaseStorage.instance
           .ref("Chat_images")
@@ -418,6 +432,7 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
           createdon: DateTime.now(),
           img: imageUrl,
           seen: false,
+          type: "img",
         );
         FirebaseFirestore.instance
             .collection("chatrooms")
@@ -435,14 +450,34 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
     }
   }
 
-  String convertFile(name){
+  String convertFile(name) {
     //https://firebasestorage.googleapis.com/v0/b/chat-app-c0eca.appspot.com/o/Chat_images%2F1645521440920-hey?alt=media&token=fc400d49-eec3-4ddd-84d4-ffd1962d5f50
-    var temp =  name.split("/")[7];
+    var temp = name.split("/")[7];
     var starttext = '%2F';
     var start = temp.indexOf(starttext);
     var end = temp.indexOf('?');
-    var finalst = temp.substring(start + starttext.length,end).trim();
+    var finalst = temp.substring(start + starttext.length, end).trim();
     return finalst.split('-').last;
+  }
+
+  @override
+  void initState() {
+    // TODO: implement initState
+    _localRenderer.initialize();
+    _remoteRenderer.initialize();
+
+    signaling.onAddRemoteStream = ((stream) {
+      _remoteRenderer.srcObject = stream;
+      setState(() {});
+    });
+    super.initState();
+  }
+
+  @override
+  void dispose() {
+    _localRenderer.dispose();
+    _remoteRenderer.dispose();
+    super.dispose();
   }
 
   @override
@@ -460,6 +495,47 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
             Text(widget.targetUser.fullname.toString()),
           ],
         ),
+        actions: [
+          IconButton(
+              onPressed: () async {
+                await signaling.openUserMedia(_localRenderer, _remoteRenderer);
+                roomId = await signaling.createRoom(_remoteRenderer);
+                MessageModel vcMsg = MessageModel(
+                  messageid: uuid.v1(),
+                  sender: widget.userModel.uid,
+                  createdon: DateTime.now(),
+                  text: roomId,
+                  seen: false,
+                  type: "vc",
+                );
+                FirebaseFirestore.instance
+                    .collection("chatrooms")
+                    .doc(widget.chatroom.chatroomid)
+                    .collection("messages")
+                    .doc(vcMsg.messageid)
+                    .set(vcMsg.toMap());
+                widget.chatroom.lastMessage = roomId;
+                FirebaseFirestore.instance
+                    .collection("chatrooms")
+                    .doc(widget.chatroom.chatroomid)
+                    .set(widget.chatroom.toMap());
+                log("Message sent!");
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => VideoScreen(
+                      roomId: roomId,
+                      signaling: signaling,
+                      chatRoomId: widget.chatroom.chatroomid,
+                      localRenderer: _localRenderer,
+                      remoteRenderer: _remoteRenderer,
+                      msgId: vcMsg.messageid,
+                    ),
+                  ),
+                );
+              },
+              icon: Icon(Icons.video_call))
+        ],
       ),
       body: SafeArea(
         child: Container(
@@ -503,7 +579,7 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                                           decoration: BoxDecoration(
                                             color: (currentMessage.sender ==
                                                     widget.userModel.uid)
-                                                ? Colors.grey
+                                                ? Colors.blueGrey
                                                 : Theme.of(context)
                                                     .colorScheme
                                                     .secondary,
@@ -526,7 +602,11 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                                               : currentMessage.file != null
                                                   ? Container(
                                                       child: InkWell(
-                                                        child: Text(convertFile(currentMessage.file.toString()),
+                                                        child: Text(
+                                                          convertFile(
+                                                              currentMessage
+                                                                  .file
+                                                                  .toString()),
                                                           style: TextStyle(
                                                               color:
                                                                   Colors.white),
@@ -545,12 +625,58 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                                                             }),
                                                       ),
                                                     )
-                                                  : Text(
-                                                      currentMessage.text
-                                                          .toString(),
-                                                      style: TextStyle(
-                                                          color: Colors.white),
-                                                    ))
+                                                  : currentMessage.type == "vc"
+                                                      ? TextButton(
+                                                          child: Text("Accept"),
+                                                          onPressed: () async {
+                                                            Navigator.push(
+                                                              context,
+                                                              MaterialPageRoute(
+                                                                builder:
+                                                                    (context) =>
+                                                                        VideoScreen(
+                                                                  roomId:
+                                                                      roomId,
+                                                                  signaling:
+                                                                      signaling,
+                                                                  chatRoomId: widget
+                                                                      .chatroom
+                                                                      .chatroomid,
+                                                                  localRenderer:
+                                                                      _localRenderer,
+                                                                  remoteRenderer:
+                                                                      _remoteRenderer,
+                                                                  msgId: widget
+                                                                      .userModel
+                                                                      .uid,
+                                                                ),
+                                                              ),
+                                                            );
+                                                            await signaling
+                                                                .openUserMedia(
+                                                                    _localRenderer,
+                                                                    _remoteRenderer);
+                                                            await signaling.joinRoom(
+                                                                currentMessage
+                                                                    .text
+                                                                    .toString(),
+                                                                _remoteRenderer);
+                                                          },
+                                                          style: TextButton
+                                                              .styleFrom(
+                                                            primary:
+                                                                Colors.black,
+                                                            backgroundColor: Colors
+                                                                .lightGreenAccent, // Background Color
+                                                          ),
+                                                        )
+                                                      : Text(
+                                                          currentMessage.text
+                                                              .toString(),
+                                                          style: TextStyle(
+                                                              color:
+                                                                  Colors.white),
+                                                        ))
                                     ]);
                               });
                         } else if (snapshot.hasError) {
